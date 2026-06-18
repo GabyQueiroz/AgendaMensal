@@ -182,8 +182,13 @@ function ensureSenacClasses() {
   ];
 
   classes.forEach((classEvent) => {
-    const exists = state.events.some((event) => event.source === classEvent.source);
-    if (exists) return;
+    const existing = state.events.find((event) => event.source === classEvent.source);
+    if (existing) {
+      existing.important = false;
+      existing.status = "info";
+      existing.category = "aula";
+      return;
+    }
     state.events.push({
       id: crypto.randomUUID(),
       title: classEvent.title,
@@ -193,8 +198,8 @@ function ensureSenacClasses() {
       category: "aula",
       repeat: "weekly",
       repeatUntil: "2026-07-01",
-      status: "pending",
-      important: true,
+      status: "info",
+      important: false,
       pinned: true,
       notes: "Aula fixa cadastrada automaticamente. Encerra em 01/07/2026.",
       source: classEvent.source,
@@ -218,8 +223,8 @@ function render() {
 function renderDashboard() {
   const monthStart = startOfMonth(state.viewDate);
   const monthEnd = endOfMonth(state.viewDate);
-  const todayEvents = instancesForDate(state.selectedDate);
-  const monthEvents = instancesBetween(monthStart, monthEnd);
+  const todayEvents = effectiveEvents(instancesForDate(state.selectedDate));
+  const monthEvents = effectiveEvents(instancesBetween(monthStart, monthEnd));
   const openTasks = state.tasks.filter((task) => !task.done);
   const doneTasks = state.tasks.filter((task) => task.done);
 
@@ -324,10 +329,10 @@ function renderAlerts(dayEvents) {
   el.alertsBox.innerHTML = "";
   const selectedTasks = tasksDueOn(state.selectedDate).filter((task) => !task.done);
   const upcoming = instancesBetween(new Date(), addDays(new Date(), 7))
-    .filter((event) => event.important && event.status === "pending")
+    .filter((event) => isEffectiveEvent(event) && event.important && event.status === "pending")
     .slice(0, 3);
 
-  if (dayEvents.some((event) => event.important && event.status === "pending")) {
+  if (dayEvents.some((event) => isEffectiveEvent(event) && event.important && event.status === "pending")) {
     addAlert("Este dia tem compromisso importante.");
   }
 
@@ -351,7 +356,7 @@ function addAlert(text) {
 }
 
 function openEventGuide(filter) {
-  const monthEvents = eventsForCurrentMonth();
+  const monthEvents = effectiveEvents(eventsForCurrentMonth());
   const todayKey = toDateKey(new Date());
   const filtered = monthEvents.filter((event) => {
     if (filter === "today") return event.date === todayKey;
@@ -385,7 +390,7 @@ function openTaskGuide(filter) {
 }
 
 function openMixedGuide(filter) {
-  const monthEvents = eventsForCurrentMonth();
+  const monthEvents = effectiveEvents(eventsForCurrentMonth());
   const events = monthEvents.filter((event) => filter === "done" ? event.status === "done" : event.status === "pending");
   const tasks = sortedTasks().filter((task) => filter === "done" ? task.done : !task.done);
 
@@ -591,9 +596,9 @@ function saveEvent(event) {
     endTime: fields.endTime.value,
     category: fields.category.value,
     repeat: fields.repeat.value,
-    status: fields.status.value,
+    status: fields.category.value === "aula" ? "info" : fields.status.value,
     repeatUntil: fields.repeatUntil.value,
-    important: fields.important.checked,
+    important: fields.category.value === "aula" ? false : fields.important.checked,
     pinned: fields.pinned.checked,
     notes: fields.notes.value.trim(),
   };
@@ -739,6 +744,18 @@ function instancesBetween(startDate, endDate) {
 
 function eventsForCurrentMonth() {
   return instancesBetween(startOfMonth(state.viewDate), endOfMonth(state.viewDate));
+}
+
+function isClassEvent(event) {
+  return event.category === "aula";
+}
+
+function isEffectiveEvent(event) {
+  return !isClassEvent(event);
+}
+
+function effectiveEvents(events) {
+  return events.filter(isEffectiveEvent);
 }
 
 function occursOn(event, dateKey) {

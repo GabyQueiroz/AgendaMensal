@@ -338,6 +338,12 @@ dialog {
   border-left-color: var(--done);
 }
 
+.mini-event.info,
+.event-chip.info {
+  border-left-color: #6d8ba6;
+  background: #edf4f8;
+}
+
 .mini-event.skipped,
 .event-chip.skipped {
   border-left-color: var(--danger);
