@@ -6,6 +6,7 @@ const SLOT_MINUTES = 60;
 const state = {
   events: [],
   tasks: [],
+  blocks: [],
   viewDate: startOfMonth(new Date()),
   selectedDate: toDateKey(new Date()),
 };
@@ -31,6 +32,8 @@ const el = {
   taskOpenCount: document.querySelector("#taskOpenCount"),
   taskDueCount: document.querySelector("#taskDueCount"),
   taskDoneCount: document.querySelector("#taskDoneCount"),
+  blockForm: document.querySelector("#blockForm"),
+  blockList: document.querySelector("#blockList"),
 };
 
 const fields = {
@@ -56,6 +59,13 @@ const taskFields = {
   notes: document.querySelector("#taskNotes"),
 };
 
+const blockFields = {
+  id: document.querySelector("#blockId"),
+  start: document.querySelector("#blockStart"),
+  end: document.querySelector("#blockEnd"),
+  reason: document.querySelector("#blockReason"),
+};
+
 document.querySelector("#previousMonth").addEventListener("click", () => moveMonth(-1));
 document.querySelector("#nextMonth").addEventListener("click", () => moveMonth(1));
 document.querySelector("#todayButton").addEventListener("click", selectToday);
@@ -67,9 +77,11 @@ document.querySelector("#cancelDialog").addEventListener("click", closeDialog);
 document.querySelector("#exportData").addEventListener("click", exportData);
 document.querySelector("#importData").addEventListener("change", importData);
 document.querySelector("#clearTask").addEventListener("click", clearTaskForm);
+document.querySelector("#downloadAvailabilityImage").addEventListener("click", downloadAvailabilityImage);
 el.form.addEventListener("submit", saveEvent);
 el.deleteEvent.addEventListener("click", deleteEvent);
 el.taskForm.addEventListener("submit", saveTask);
+el.blockForm.addEventListener("submit", saveBlock);
 
 load();
 render();
@@ -78,6 +90,8 @@ function load() {
   const saved = localStorage.getItem(STORAGE_KEY);
   if (!saved) {
     state.events = seedEvents();
+    state.blocks = [];
+    ensureSenacClasses();
     persist();
     return;
   }
@@ -86,9 +100,13 @@ function load() {
     const parsed = JSON.parse(saved);
     state.events = Array.isArray(parsed.events) ? parsed.events : [];
     state.tasks = Array.isArray(parsed.tasks) ? parsed.tasks : [];
+    state.blocks = Array.isArray(parsed.blocks) ? parsed.blocks : [];
+    ensureSenacClasses();
+    persist();
   } catch {
     state.events = [];
     state.tasks = [];
+    state.blocks = [];
   }
 }
 
@@ -127,8 +145,54 @@ function seedEvents() {
   ];
 }
 
+function ensureSenacClasses() {
+  const classes = [
+    {
+      source: "senac-terca-2026-07-01",
+      title: "Aula Senac",
+      date: "2026-06-23",
+      time: "19:00",
+      endTime: "22:40",
+    },
+    {
+      source: "senac-quinta-2026-07-01",
+      title: "Aula Senac",
+      date: "2026-06-18",
+      time: "19:00",
+      endTime: "22:40",
+    },
+    {
+      source: "senac-sexta-2026-07-01",
+      title: "Aula Senac",
+      date: "2026-06-19",
+      time: "19:00",
+      endTime: "20:40",
+    },
+  ];
+
+  classes.forEach((classEvent) => {
+    const exists = state.events.some((event) => event.source === classEvent.source);
+    if (exists) return;
+    state.events.push({
+      id: crypto.randomUUID(),
+      title: classEvent.title,
+      date: classEvent.date,
+      time: classEvent.time,
+      endTime: classEvent.endTime,
+      category: "aula",
+      repeat: "weekly",
+      repeatUntil: "2026-07-01",
+      status: "pending",
+      important: true,
+      pinned: true,
+      notes: "Aula fixa cadastrada automaticamente. Encerra em 01/07/2026.",
+      source: classEvent.source,
+    });
+  });
+}
+
 function persist() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify({ events: state.events, tasks: state.tasks }));
+  localStorage.setItem(STORAGE_KEY, JSON.stringify({ events: state.events, tasks: state.tasks, blocks: state.blocks }));
 }
 
 function render() {
@@ -136,6 +200,7 @@ function render() {
   renderCalendar();
   renderDay();
   renderAvailability();
+  renderBlocks();
   renderTasks();
 }
 
@@ -317,10 +382,24 @@ function renderTasks() {
 }
 
 function renderAvailability() {
-  const busy = instancesForDate(state.selectedDate)
-    .filter((event) => event.status !== "skipped")
-    .map((event) => [toMinutes(event.time), toMinutes(event.endTime)])
-    .sort((a, b) => a[0] - b[0]);
+  const slots = availabilitySlotsForDate(state.selectedDate);
+
+  el.availabilityList.innerHTML = "";
+  if (!slots.length) {
+    el.availabilityList.innerHTML = '<div class="empty-state">Sem blocos livres de 1 hora entre 07:00 e 22:00.</div>';
+    return;
+  }
+
+  slots.slice(0, 8).forEach(([start, end]) => {
+    const slot = document.createElement("div");
+    slot.className = "slot";
+    slot.textContent = `${fromMinutes(start)} - ${fromMinutes(end)}`;
+    el.availabilityList.appendChild(slot);
+  });
+}
+
+function availabilitySlotsForDate(dateKey) {
+  const busy = busyRangesForDate(dateKey);
 
   const slots = [];
   let cursor = toMinutes(WORK_START);
@@ -339,17 +418,38 @@ function renderAvailability() {
     cursor += SLOT_MINUTES;
   }
 
-  el.availabilityList.innerHTML = "";
-  if (!slots.length) {
-    el.availabilityList.innerHTML = '<div class="empty-state">Sem blocos livres de 1 hora entre 07:00 e 22:00.</div>';
+  return slots;
+}
+
+function busyRangesForDate(dateKey) {
+  const eventRanges = instancesForDate(dateKey)
+    .filter((event) => event.status !== "skipped")
+    .map((event) => [toMinutes(event.time), toMinutes(event.endTime)]);
+  const blockRanges = blocksForDate(dateKey).map((block) => [toMinutes(block.time), toMinutes(block.endTime)]);
+  return [...eventRanges, ...blockRanges].sort((a, b) => a[0] - b[0]);
+}
+
+function renderBlocks() {
+  const blocks = blocksForDate(state.selectedDate);
+  el.blockList.innerHTML = "";
+
+  if (!blocks.length) {
+    el.blockList.innerHTML = '<div class="empty-state">Nenhum horário livre foi bloqueado neste dia.</div>';
     return;
   }
 
-  slots.slice(0, 8).forEach(([start, end]) => {
-    const slot = document.createElement("div");
-    slot.className = "slot";
-    slot.textContent = `${fromMinutes(start)} - ${fromMinutes(end)}`;
-    el.availabilityList.appendChild(slot);
+  blocks.forEach((block) => {
+    const item = document.createElement("article");
+    item.className = "block-item";
+    item.innerHTML = `
+      <div>
+        <strong>${block.time} - ${block.endTime}</strong>
+        <small>${escapeHtml(block.reason || "Bloqueio manual")}</small>
+      </div>
+      <button class="icon-button" type="button" title="Remover bloqueio" aria-label="Remover bloqueio">×</button>
+    `;
+    item.querySelector("button").addEventListener("click", () => deleteBlock(block.id));
+    el.blockList.appendChild(item);
   });
 }
 
@@ -485,10 +585,46 @@ function clearTaskForm() {
   taskFields.id.value = "";
 }
 
+function saveBlock(event) {
+  event.preventDefault();
+  if (toMinutes(blockFields.end.value) <= toMinutes(blockFields.start.value)) {
+    blockFields.end.setCustomValidity("O fim precisa ser depois do início.");
+    blockFields.end.reportValidity();
+    return;
+  }
+  blockFields.end.setCustomValidity("");
+
+  state.blocks.push({
+    id: crypto.randomUUID(),
+    date: state.selectedDate,
+    time: blockFields.start.value,
+    endTime: blockFields.end.value,
+    reason: blockFields.reason.value.trim(),
+  });
+
+  el.blockForm.reset();
+  blockFields.start.value = "10:00";
+  blockFields.end.value = "12:00";
+  persist();
+  render();
+}
+
+function deleteBlock(id) {
+  state.blocks = state.blocks.filter((block) => block.id !== id);
+  persist();
+  render();
+}
+
 function instancesForDate(dateKey) {
   return state.events
     .filter((event) => occursOn(event, dateKey))
     .map((event) => ({ ...event, date: dateKey }))
+    .sort((a, b) => a.time.localeCompare(b.time));
+}
+
+function blocksForDate(dateKey) {
+  return state.blocks
+    .filter((block) => block.date === dateKey)
     .sort((a, b) => a.time.localeCompare(b.time));
 }
 
@@ -529,7 +665,7 @@ function selectToday() {
 }
 
 function exportData() {
-  const blob = new Blob([JSON.stringify({ events: state.events, tasks: state.tasks }, null, 2)], { type: "application/json" });
+  const blob = new Blob([JSON.stringify({ events: state.events, tasks: state.tasks, blocks: state.blocks }, null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
@@ -548,6 +684,7 @@ function importData(event) {
       if (!Array.isArray(parsed.events)) throw new Error("Formato inválido");
       state.events = parsed.events;
       state.tasks = Array.isArray(parsed.tasks) ? parsed.tasks : [];
+      state.blocks = Array.isArray(parsed.blocks) ? parsed.blocks : [];
       persist();
       render();
     } catch {
@@ -558,8 +695,81 @@ function importData(event) {
   event.target.value = "";
 }
 
+function downloadAvailabilityImage() {
+  const weekStart = startOfWeekMonday(parseDateKey(state.selectedDate));
+  const days = Array.from({ length: 7 }, (_, index) => addDays(weekStart, index));
+  const slotsByDay = days.map((day) => ({
+    date: toDateKey(day),
+    label: new Intl.DateTimeFormat("pt-BR", { weekday: "short", day: "2-digit", month: "2-digit" }).format(day),
+    slots: availabilitySlotsForDate(toDateKey(day)),
+  }));
+
+  const width = 1400;
+  const rowHeight = 48;
+  const headerHeight = 150;
+  const maxSlots = Math.max(1, ...slotsByDay.map((day) => day.slots.length));
+  const height = headerHeight + maxSlots * rowHeight + 80;
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d");
+
+  ctx.fillStyle = "#f6f7f4";
+  ctx.fillRect(0, 0, width, height);
+  ctx.fillStyle = "#20262a";
+  ctx.font = "700 34px Segoe UI, Arial";
+  ctx.fillText("Horários livres da semana", 40, 58);
+  ctx.font = "600 22px Segoe UI, Arial";
+  ctx.fillStyle = "#667078";
+  ctx.fillText(`${formatShortDate(toDateKey(days[0]))} a ${formatShortDate(toDateKey(days[6]))}`, 40, 94);
+
+  const gap = 14;
+  const colWidth = (width - 80 - gap * 6) / 7;
+  const top = 128;
+
+  slotsByDay.forEach((day, index) => {
+    const x = 40 + index * (colWidth + gap);
+    ctx.fillStyle = "#ffffff";
+    roundRect(ctx, x, top, colWidth, height - top - 40, 10);
+    ctx.fill();
+    ctx.strokeStyle = "#dce2df";
+    ctx.stroke();
+
+    ctx.fillStyle = "#1d6f68";
+    ctx.font = "800 20px Segoe UI, Arial";
+    ctx.fillText(capitalize(day.label.replace(".", "")), x + 14, top + 34);
+
+    if (!day.slots.length) {
+      ctx.fillStyle = "#667078";
+      ctx.font = "700 17px Segoe UI, Arial";
+      ctx.fillText("Sem livres", x + 14, top + 76);
+      return;
+    }
+
+    day.slots.forEach(([start, end], slotIndex) => {
+      const y = top + 56 + slotIndex * rowHeight;
+      ctx.fillStyle = "#eef3f1";
+      roundRect(ctx, x + 12, y, colWidth - 24, 34, 8);
+      ctx.fill();
+      ctx.fillStyle = "#20262a";
+      ctx.font = "800 16px Segoe UI, Arial";
+      ctx.fillText(`${fromMinutes(start)} - ${fromMinutes(end)}`, x + 22, y + 23);
+    });
+  });
+
+  const link = document.createElement("a");
+  link.href = canvas.toDataURL("image/png");
+  link.download = `horarios-livres-${toDateKey(days[0])}.png`;
+  link.click();
+}
+
 function startOfMonth(date) {
   return new Date(date.getFullYear(), date.getMonth(), 1);
+}
+
+function startOfWeekMonday(date) {
+  const day = date.getDay() || 7;
+  return addDays(date, 1 - day);
 }
 
 function endOfMonth(date) {
@@ -584,6 +794,20 @@ function toDateKey(date) {
 function parseDateKey(key) {
   const [year, month, day] = key.split("-").map(Number);
   return new Date(year, month - 1, day);
+}
+
+function roundRect(ctx, x, y, width, height, radius) {
+  ctx.beginPath();
+  ctx.moveTo(x + radius, y);
+  ctx.lineTo(x + width - radius, y);
+  ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+  ctx.lineTo(x + width, y + height - radius);
+  ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+  ctx.lineTo(x + radius, y + height);
+  ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+  ctx.lineTo(x, y + radius);
+  ctx.quadraticCurveTo(x, y, x + radius, y);
+  ctx.closePath();
 }
 
 function sortedTasks() {

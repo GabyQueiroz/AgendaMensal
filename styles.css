@@ -373,8 +373,14 @@ dialog {
   margin-bottom: 12px;
 }
 
+.section-actions {
+  display: flex;
+  gap: 10px;
+}
+
 .event-list,
-.availability {
+.availability,
+.block-list {
   display: grid;
   gap: 10px;
 }
@@ -425,6 +431,41 @@ dialog {
   background: #f2f5ec;
   color: #405128;
   font-weight: 800;
+}
+
+.block-form {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.block-item {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 12px;
+  border-left: 4px solid var(--danger);
+  border-radius: 8px;
+  background: #fdebed;
+}
+
+.block-item strong,
+.block-item small {
+  display: block;
+}
+
+.block-item small {
+  margin-top: 3px;
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.block-item .icon-button {
+  width: 34px;
+  height: 34px;
+  min-height: 34px;
+  background: #fff;
 }
 
 .task-panel {
@@ -649,7 +690,8 @@ textarea {
   .topbar,
   .dashboard,
   .task-header,
-  .task-form {
+  .task-form,
+  .block-form {
     grid-template-columns: 1fr;
   }
 
