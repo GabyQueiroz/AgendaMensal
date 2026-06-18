@@ -19,27 +19,29 @@
             ⇧
             <input id="importData" type="file" accept="application/json">
           </label>
+          <button class="secondary-button" id="quickEvents" type="button">Guia rápido</button>
+          <button class="secondary-button" id="quickTasks" type="button">Tarefas</button>
           <button class="primary-button" id="newEvent" type="button"><span aria-hidden="true">+</span> Novo</button>
         </div>
       </section>
 
       <section class="dashboard" aria-label="Dashboard">
-        <article class="metric">
+        <button class="metric" id="todayMetric" type="button">
           <span>Hoje</span>
           <strong id="todayCount">0</strong>
-        </article>
-        <article class="metric">
+        </button>
+        <button class="metric" id="importantMetric" type="button">
           <span>Importantes</span>
           <strong id="importantCount">0</strong>
-        </article>
-        <article class="metric">
+        </button>
+        <button class="metric" id="pendingMetric" type="button">
           <span>A fazer</span>
           <strong id="pendingCount">0</strong>
-        </article>
-        <article class="metric">
+        </button>
+        <button class="metric" id="doneMetric" type="button">
           <span>Feitos</span>
           <strong id="doneCount">0</strong>
-        </article>
+        </button>
       </section>
 
       <section class="workspace">
@@ -234,6 +236,19 @@
           <button class="primary-button" type="submit">Salvar</button>
         </div>
       </form>
+    </dialog>
+
+    <dialog id="quickDialog">
+      <div class="quick-modal">
+        <div class="dialog-header">
+          <div>
+            <p class="eyebrow" id="quickEyebrow">Guia rápido</p>
+            <h2 id="quickTitle">Compromissos</h2>
+          </div>
+          <button class="icon-button" type="button" id="closeQuickDialog" title="Fechar" aria-label="Fechar">×</button>
+        </div>
+        <div class="quick-list" id="quickList"></div>
+      </div>
     </dialog>
 
     <script src="app.js"></script>

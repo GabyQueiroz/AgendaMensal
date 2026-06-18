@@ -34,6 +34,10 @@ const el = {
   taskDoneCount: document.querySelector("#taskDoneCount"),
   blockForm: document.querySelector("#blockForm"),
   blockList: document.querySelector("#blockList"),
+  quickDialog: document.querySelector("#quickDialog"),
+  quickEyebrow: document.querySelector("#quickEyebrow"),
+  quickTitle: document.querySelector("#quickTitle"),
+  quickList: document.querySelector("#quickList"),
 };
 
 const fields = {
@@ -78,6 +82,13 @@ document.querySelector("#exportData").addEventListener("click", exportData);
 document.querySelector("#importData").addEventListener("change", importData);
 document.querySelector("#clearTask").addEventListener("click", clearTaskForm);
 document.querySelector("#downloadAvailabilityImage").addEventListener("click", downloadAvailabilityImage);
+document.querySelector("#quickEvents").addEventListener("click", () => openEventGuide("month"));
+document.querySelector("#quickTasks").addEventListener("click", () => openTaskGuide("all"));
+document.querySelector("#todayMetric").addEventListener("click", () => openEventGuide("today"));
+document.querySelector("#importantMetric").addEventListener("click", () => openEventGuide("important"));
+document.querySelector("#pendingMetric").addEventListener("click", () => openMixedGuide("pending"));
+document.querySelector("#doneMetric").addEventListener("click", () => openMixedGuide("done"));
+document.querySelector("#closeQuickDialog").addEventListener("click", closeQuickDialog);
 el.form.addEventListener("submit", saveEvent);
 el.deleteEvent.addEventListener("click", deleteEvent);
 el.taskForm.addEventListener("submit", saveTask);
@@ -337,6 +348,93 @@ function addAlert(text) {
   alert.className = "alert";
   alert.textContent = text;
   el.alertsBox.appendChild(alert);
+}
+
+function openEventGuide(filter) {
+  const monthEvents = eventsForCurrentMonth();
+  const todayKey = toDateKey(new Date());
+  const filtered = monthEvents.filter((event) => {
+    if (filter === "today") return event.date === todayKey;
+    if (filter === "important") return event.important;
+    return true;
+  });
+  const titles = {
+    month: "Compromissos do mês",
+    today: "Compromissos de hoje",
+    important: "Compromissos importantes",
+  };
+
+  openQuickDialog("Guia rápido", titles[filter] || titles.month);
+  renderQuickItems(filtered, "event");
+}
+
+function openTaskGuide(filter) {
+  const tasks = sortedTasks().filter((task) => {
+    if (filter === "pending") return !task.done;
+    if (filter === "done") return task.done;
+    return true;
+  });
+  const titles = {
+    all: "Tarefas",
+    pending: "Tarefas a fazer",
+    done: "Tarefas feitas",
+  };
+
+  openQuickDialog("Menu de tarefas", titles[filter] || titles.all);
+  renderQuickItems(tasks, "task");
+}
+
+function openMixedGuide(filter) {
+  const monthEvents = eventsForCurrentMonth();
+  const events = monthEvents.filter((event) => filter === "done" ? event.status === "done" : event.status === "pending");
+  const tasks = sortedTasks().filter((task) => filter === "done" ? task.done : !task.done);
+
+  openQuickDialog("Guia rápido", filter === "done" ? "Feitos" : "A fazer");
+  renderQuickItems(sortMixedItems([...events, ...tasks]), "mixed");
+}
+
+function openQuickDialog(eyebrow, title) {
+  el.quickEyebrow.textContent = eyebrow;
+  el.quickTitle.textContent = title;
+  el.quickList.innerHTML = "";
+  el.quickDialog.showModal();
+}
+
+function closeQuickDialog() {
+  el.quickDialog.close();
+}
+
+function renderQuickItems(items, type) {
+  if (!items.length) {
+    el.quickList.innerHTML = '<div class="empty-state">Nada encontrado para este filtro.</div>';
+    return;
+  }
+
+  items.forEach((item) => {
+    const isTask = type === "task" || Boolean(item.createdAt);
+    const row = document.createElement("article");
+    row.className = `quick-item ${item.important ? "important" : ""} ${item.status || ""} ${item.done ? "done" : ""}`;
+
+    if (isTask) {
+      row.innerHTML = `
+        <div>
+          <strong>${escapeHtml(item.title)}</strong>
+          <small>${item.dueDate ? `Prazo: ${formatShortDate(item.dueDate)}` : "Sem prazo"} · ${labelPriority(item.priority)}</small>
+        </div>
+        <span class="quick-pill">${item.done ? "Feita" : "A fazer"}</span>
+      `;
+    } else {
+      row.innerHTML = `
+        <div>
+          <strong>${escapeHtml(item.title)}</strong>
+          <small>${formatShortDate(item.date)} · ${item.time} - ${item.endTime}</small>
+        </div>
+        <span class="quick-pill">${labelCategory(item.category)}</span>
+      `;
+    }
+
+    el.quickList.appendChild(row);
+  });
 }
 
 function renderTasks() {
@@ -639,6 +737,10 @@ function instancesBetween(startDate, endDate) {
   return items;
 }
 
+function eventsForCurrentMonth() {
+  return instancesBetween(startOfMonth(state.viewDate), endOfMonth(state.viewDate));
+}
+
 function occursOn(event, dateKey) {
   const date = parseDateKey(dateKey);
   const start = parseDateKey(event.date);
@@ -818,6 +920,17 @@ function sortedTasks() {
     const dateB = b.dueDate || "9999-12-31";
     if (dateA !== dateB) return dateA.localeCompare(dateB);
     return (priorityOrder[a.priority] ?? 1) - (priorityOrder[b.priority] ?? 1);
+  });
+}
+
+function sortMixedItems(items) {
+  return [...items].sort((a, b) => {
+    const dateA = a.date || a.dueDate || "9999-12-31";
+    const dateB = b.date || b.dueDate || "9999-12-31";
+    if (dateA !== dateB) return dateA.localeCompare(dateB);
+    const timeA = a.time || "23:59";
+    const timeB = b.time || "23:59";
+    return timeA.localeCompare(timeB);
   });
 }
 
