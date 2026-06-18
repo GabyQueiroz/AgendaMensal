@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Agenda do Mês</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="topbar" aria-label="Resumo da agenda">
+        <div>
+          <p class="eyebrow">Agenda pessoal</p>
+          <h1>Compromissos do mês</h1>
+        </div>
+        <div class="top-actions">
+          <button class="icon-button" id="exportData" type="button" title="Exportar dados" aria-label="Exportar dados">⇩</button>
+          <label class="icon-button import-button" title="Importar dados" aria-label="Importar dados">
+            ⇧
+            <input id="importData" type="file" accept="application/json">
+          </label>
+          <button class="primary-button" id="newEvent" type="button"><span aria-hidden="true">+</span> Novo</button>
+        </div>
+      </section>
+
+      <section class="dashboard" aria-label="Dashboard">
+        <article class="metric">
+          <span>Hoje</span>
+          <strong id="todayCount">0</strong>
+        </article>
+        <article class="metric">
+          <span>Importantes</span>
+          <strong id="importantCount">0</strong>
+        </article>
+        <article class="metric">
+          <span>A fazer</span>
+          <strong id="pendingCount">0</strong>
+        </article>
+        <article class="metric">
+          <span>Feitos</span>
+          <strong id="doneCount">0</strong>
+        </article>
+      </section>
+
+      <section class="workspace">
+        <section class="calendar-panel" aria-label="Calendário mensal">
+          <div class="month-toolbar">
+            <button class="icon-button" id="previousMonth" type="button" title="Mês anterior" aria-label="Mês anterior">‹</button>
+            <div>
+              <h2 id="monthTitle">Mês</h2>
+              <p id="monthSubtitle"></p>
+            </div>
+            <button class="icon-button" id="nextMonth" type="button" title="Próximo mês" aria-label="Próximo mês">›</button>
+          </div>
+          <div class="weekday-row" aria-hidden="true">
+            <span>Dom</span><span>Seg</span><span>Ter</span><span>Qua</span><span>Qui</span><span>Sex</span><span>Sáb</span>
+          </div>
+          <div class="calendar-grid" id="calendarGrid"></div>
+        </section>
+
+        <aside class="day-panel" aria-label="Detalhes do dia">
+          <div class="day-header">
+            <div>
+              <p class="eyebrow">Dia selecionado</p>
+              <h2 id="selectedDayTitle">Hoje</h2>
+            </div>
+            <button class="secondary-button" id="todayButton" type="button">Hoje</button>
+          </div>
+
+          <div class="alerts" id="alertsBox"></div>
+
+          <div class="panel-section">
+            <div class="section-title">
+              <h3>Compromissos</h3>
+              <button class="text-button" id="addForDay" type="button">Adicionar</button>
+            </div>
+            <div class="event-list" id="eventList"></div>
+          </div>
+
+          <div class="panel-section">
+            <div class="section-title">
+              <h3>Horários livres</h3>
+              <button class="text-button" id="refreshAvailability" type="button">Gerar</button>
+            </div>
+            <div class="availability" id="availabilityList"></div>
+          </div>
+        </aside>
+      </section>
+    </main>
+
+    <dialog id="eventDialog">
+      <form id="eventForm" method="dialog">
+        <div class="dialog-header">
+          <h2 id="dialogTitle">Novo compromisso</h2>
+          <button class="icon-button" value="cancel" type="button" id="closeDialog" title="Fechar" aria-label="Fechar">×</button>
+        </div>
+
+        <input type="hidden" id="eventId">
+        <div class="form-grid">
+          <label class="wide">
+            Título
+            <input id="title" name="title" required maxlength="80" placeholder="Ex.: Aula particular, consulta, reunião">
+          </label>
+          <label>
+            Data
+            <input id="date" name="date" type="date" required>
+          </label>
+          <label>
+            Início
+            <input id="time" name="time" type="time" required>
+          </label>
+          <label>
+            Fim
+            <input id="endTime" name="endTime" type="time" required>
+          </label>
+          <label>
+            Tipo
+            <select id="category" name="category">
+              <option value="aula">Aula</option>
+              <option value="saude">Saúde</option>
+              <option value="trabalho">Trabalho</option>
+              <option value="pessoal">Pessoal</option>
+              <option value="outro">Outro</option>
+            </select>
+          </label>
+          <label>
+            Repetição
+            <select id="repeat" name="repeat">
+              <option value="none">Não repetir</option>
+              <option value="daily">Todo dia</option>
+              <option value="weekly">Toda semana</option>
+              <option value="monthly">Todo mês</option>
+            </select>
+          </label>
+          <label>
+            Status
+            <select id="status" name="status">
+              <option value="pending">Vou fazer</option>
+              <option value="done">Feito</option>
+              <option value="skipped">Não vou fazer</option>
+            </select>
+          </label>
+          <label>
+            Repetir até
+            <input id="repeatUntil" name="repeatUntil" type="date">
+          </label>
+          <label class="check-row">
+            <input id="important" name="important" type="checkbox">
+            Aviso importante
+          </label>
+          <label class="check-row">
+            <input id="pinned" name="pinned" type="checkbox">
+            Fixar na rotina
+          </label>
+          <label class="wide">
+            Observações
+            <textarea id="notes" name="notes" rows="3" maxlength="220" placeholder="Detalhes rápidos para lembrar depois"></textarea>
+          </label>
+        </div>
+        <div class="dialog-actions">
+          <button class="danger-button" id="deleteEvent" type="button">Excluir</button>
+          <span></span>
+          <button class="secondary-button" type="button" id="cancelDialog">Cancelar</button>
+          <button class="primary-button" type="submit">Salvar</button>
+        </div>
+      </form>
+    </dialog>
+
+    <script src="app.js"></script>
+  </body>
+</html>
