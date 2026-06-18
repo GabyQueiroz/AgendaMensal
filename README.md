@@ -15,6 +15,7 @@ Recursos principais:
 - Marcação de aviso importante.
 - Compromissos fixos com repetição diária, semanal ou mensal.
 - Lista automática de horários livres entre 07:00 e 22:00.
+- Lista de tarefas com prazo, prioridade, detalhes e controle de concluído.
 - Exportação e importação de backup em JSON.
 
 ## Backup

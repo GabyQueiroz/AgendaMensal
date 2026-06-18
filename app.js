@@ -5,6 +5,7 @@ const SLOT_MINUTES = 60;
 
 const state = {
   events: [],
+  tasks: [],
   viewDate: startOfMonth(new Date()),
   selectedDate: toDateKey(new Date()),
 };
@@ -25,6 +26,11 @@ const el = {
   form: document.querySelector("#eventForm"),
   dialogTitle: document.querySelector("#dialogTitle"),
   deleteEvent: document.querySelector("#deleteEvent"),
+  taskForm: document.querySelector("#taskForm"),
+  taskList: document.querySelector("#taskList"),
+  taskOpenCount: document.querySelector("#taskOpenCount"),
+  taskDueCount: document.querySelector("#taskDueCount"),
+  taskDoneCount: document.querySelector("#taskDoneCount"),
 };
 
 const fields = {
@@ -42,6 +48,14 @@ const fields = {
   notes: document.querySelector("#notes"),
 };
 
+const taskFields = {
+  id: document.querySelector("#taskId"),
+  title: document.querySelector("#taskTitle"),
+  dueDate: document.querySelector("#taskDueDate"),
+  priority: document.querySelector("#taskPriority"),
+  notes: document.querySelector("#taskNotes"),
+};
+
 document.querySelector("#previousMonth").addEventListener("click", () => moveMonth(-1));
 document.querySelector("#nextMonth").addEventListener("click", () => moveMonth(1));
 document.querySelector("#todayButton").addEventListener("click", selectToday);
@@ -52,8 +66,10 @@ document.querySelector("#closeDialog").addEventListener("click", closeDialog);
 document.querySelector("#cancelDialog").addEventListener("click", closeDialog);
 document.querySelector("#exportData").addEventListener("click", exportData);
 document.querySelector("#importData").addEventListener("change", importData);
+document.querySelector("#clearTask").addEventListener("click", clearTaskForm);
 el.form.addEventListener("submit", saveEvent);
 el.deleteEvent.addEventListener("click", deleteEvent);
+el.taskForm.addEventListener("submit", saveTask);
 
 load();
 render();
@@ -69,8 +85,10 @@ function load() {
   try {
     const parsed = JSON.parse(saved);
     state.events = Array.isArray(parsed.events) ? parsed.events : [];
+    state.tasks = Array.isArray(parsed.tasks) ? parsed.tasks : [];
   } catch {
     state.events = [];
+    state.tasks = [];
   }
 }
 
@@ -110,7 +128,7 @@ function seedEvents() {
 }
 
 function persist() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify({ events: state.events }));
+  localStorage.setItem(STORAGE_KEY, JSON.stringify({ events: state.events, tasks: state.tasks }));
 }
 
 function render() {
@@ -118,6 +136,7 @@ function render() {
   renderCalendar();
   renderDay();
   renderAvailability();
+  renderTasks();
 }
 
 function renderDashboard() {
@@ -125,11 +144,13 @@ function renderDashboard() {
   const monthEnd = endOfMonth(state.viewDate);
   const todayEvents = instancesForDate(state.selectedDate);
   const monthEvents = instancesBetween(monthStart, monthEnd);
+  const openTasks = state.tasks.filter((task) => !task.done);
+  const doneTasks = state.tasks.filter((task) => task.done);
 
   el.todayCount.textContent = todayEvents.length;
-  el.importantCount.textContent = monthEvents.filter((event) => event.important).length;
-  el.pendingCount.textContent = monthEvents.filter((event) => event.status === "pending").length;
-  el.doneCount.textContent = monthEvents.filter((event) => event.status === "done").length;
+  el.importantCount.textContent = monthEvents.filter((event) => event.important).length + openTasks.filter((task) => task.priority === "high").length;
+  el.pendingCount.textContent = monthEvents.filter((event) => event.status === "pending").length + openTasks.length;
+  el.doneCount.textContent = monthEvents.filter((event) => event.status === "done").length + doneTasks.length;
 }
 
 function renderCalendar() {
@@ -225,12 +246,17 @@ function renderDay() {
 
 function renderAlerts(dayEvents) {
   el.alertsBox.innerHTML = "";
+  const selectedTasks = tasksDueOn(state.selectedDate).filter((task) => !task.done);
   const upcoming = instancesBetween(new Date(), addDays(new Date(), 7))
     .filter((event) => event.important && event.status === "pending")
     .slice(0, 3);
 
   if (dayEvents.some((event) => event.important && event.status === "pending")) {
     addAlert("Este dia tem compromisso importante.");
+  }
+
+  if (selectedTasks.length) {
+    addAlert(`${selectedTasks.length} tarefa(s) com prazo neste dia.`);
   }
 
   upcoming.forEach((event) => {
@@ -246,6 +272,48 @@ function addAlert(text) {
   alert.className = "alert";
   alert.textContent = text;
   el.alertsBox.appendChild(alert);
+}
+
+function renderTasks() {
+  const todayKey = toDateKey(new Date());
+  const openTasks = state.tasks.filter((task) => !task.done);
+  const doneTasks = state.tasks.filter((task) => task.done);
+  const dueToday = openTasks.filter((task) => task.dueDate === todayKey);
+
+  el.taskOpenCount.textContent = openTasks.length;
+  el.taskDoneCount.textContent = doneTasks.length;
+  el.taskDueCount.textContent = dueToday.length;
+  el.taskList.innerHTML = "";
+
+  if (!state.tasks.length) {
+    el.taskList.innerHTML = '<div class="empty-state">Nenhuma tarefa cadastrada ainda.</div>';
+    return;
+  }
+
+  sortedTasks().forEach((task) => {
+    const item = document.createElement("article");
+    item.className = `task-item ${task.priority} ${task.done ? "done" : ""}`;
+    item.innerHTML = `
+      <input class="task-check" type="checkbox" aria-label="Marcar tarefa como feita" ${task.done ? "checked" : ""}>
+      <div class="task-body">
+        <strong>${escapeHtml(task.title)}</strong>
+        ${task.notes ? `<p>${escapeHtml(task.notes)}</p>` : ""}
+        <div class="task-meta">
+          <span>${labelPriority(task.priority)}</span>
+          ${task.dueDate ? `<span>${formatShortDate(task.dueDate)}</span>` : "<span>Sem prazo</span>"}
+        </div>
+      </div>
+      <div class="task-actions">
+        <button class="icon-button" type="button" title="Editar tarefa" aria-label="Editar tarefa" data-action="edit">✎</button>
+        <button class="icon-button" type="button" title="Excluir tarefa" aria-label="Excluir tarefa" data-action="delete">×</button>
+      </div>
+    `;
+
+    item.querySelector(".task-check").addEventListener("change", (event) => toggleTask(task.id, event.target.checked));
+    item.querySelector('[data-action="edit"]').addEventListener("click", () => editTask(task.id));
+    item.querySelector('[data-action="delete"]').addEventListener("click", () => deleteTask(task.id));
+    el.taskList.appendChild(item);
+  });
 }
 
 function renderAvailability() {
@@ -363,6 +431,60 @@ function setStatus(id, status) {
   }
 }
 
+function saveTask(event) {
+  event.preventDefault();
+  const data = {
+    id: taskFields.id.value || crypto.randomUUID(),
+    title: taskFields.title.value.trim(),
+    dueDate: taskFields.dueDate.value,
+    priority: taskFields.priority.value,
+    notes: taskFields.notes.value.trim(),
+    done: false,
+    createdAt: new Date().toISOString(),
+  };
+
+  const existing = state.tasks.find((task) => task.id === data.id);
+  if (existing) {
+    data.done = existing.done;
+    data.createdAt = existing.createdAt;
+    state.tasks = state.tasks.map((task) => (task.id === data.id ? data : task));
+  } else {
+    state.tasks.push(data);
+  }
+
+  persist();
+  clearTaskForm();
+  render();
+}
+
+function editTask(id) {
+  const task = state.tasks.find((item) => item.id === id);
+  if (!task) return;
+  taskFields.id.value = task.id;
+  taskFields.title.value = task.title;
+  taskFields.dueDate.value = task.dueDate || "";
+  taskFields.priority.value = task.priority || "normal";
+  taskFields.notes.value = task.notes || "";
+  taskFields.title.focus();
+}
+
+function toggleTask(id, done) {
+  state.tasks = state.tasks.map((task) => (task.id === id ? { ...task, done } : task));
+  persist();
+  render();
+}
+
+function deleteTask(id) {
+  state.tasks = state.tasks.filter((task) => task.id !== id);
+  persist();
+  render();
+}
+
+function clearTaskForm() {
+  el.taskForm.reset();
+  taskFields.id.value = "";
+}
+
 function instancesForDate(dateKey) {
   return state.events
     .filter((event) => occursOn(event, dateKey))
@@ -407,7 +529,7 @@ function selectToday() {
 }
 
 function exportData() {
-  const blob = new Blob([JSON.stringify({ events: state.events }, null, 2)], { type: "application/json" });
+  const blob = new Blob([JSON.stringify({ events: state.events, tasks: state.tasks }, null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
@@ -425,6 +547,7 @@ function importData(event) {
       const parsed = JSON.parse(reader.result);
       if (!Array.isArray(parsed.events)) throw new Error("Formato inválido");
       state.events = parsed.events;
+      state.tasks = Array.isArray(parsed.tasks) ? parsed.tasks : [];
       persist();
       render();
     } catch {
@@ -463,6 +586,21 @@ function parseDateKey(key) {
   return new Date(year, month - 1, day);
 }
 
+function sortedTasks() {
+  const priorityOrder = { high: 0, normal: 1, low: 2 };
+  return [...state.tasks].sort((a, b) => {
+    if (a.done !== b.done) return a.done ? 1 : -1;
+    const dateA = a.dueDate || "9999-12-31";
+    const dateB = b.dueDate || "9999-12-31";
+    if (dateA !== dateB) return dateA.localeCompare(dateB);
+    return (priorityOrder[a.priority] ?? 1) - (priorityOrder[b.priority] ?? 1);
+  });
+}
+
+function tasksDueOn(dateKey) {
+  return state.tasks.filter((task) => task.dueDate === dateKey);
+}
+
 function toMinutes(time) {
   const [hours, minutes] = time.split(":").map(Number);
   return hours * 60 + minutes;
@@ -492,4 +630,16 @@ function labelCategory(category) {
     pessoal: "Pessoal",
     outro: "Outro",
   }[category] || "Outro";
+}
+
+function labelPriority(priority) {
+  return {
+    high: "Alta prioridade",
+    normal: "Prioridade normal",
+    low: "Baixa prioridade",
+  }[priority] || "Prioridade normal";
+}
+
+function formatShortDate(dateKey) {
+  return new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" }).format(parseDateKey(dateKey));
 }

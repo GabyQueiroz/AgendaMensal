@@ -86,6 +86,50 @@
           </div>
         </aside>
       </section>
+
+      <section class="task-panel" aria-label="Lista de tarefas">
+        <div class="task-header">
+          <div>
+            <p class="eyebrow">Lista de tarefas</p>
+            <h2>O que preciso fazer</h2>
+          </div>
+          <div class="task-stats">
+            <span><strong id="taskOpenCount">0</strong> abertas</span>
+            <span><strong id="taskDueCount">0</strong> para hoje</span>
+            <span><strong id="taskDoneCount">0</strong> feitas</span>
+          </div>
+        </div>
+
+        <form class="task-form" id="taskForm">
+          <input type="hidden" id="taskId">
+          <label class="task-title-field">
+            Tarefa
+            <input id="taskTitle" required maxlength="100" placeholder="Ex.: preparar aula, responder paciente, pagar conta">
+          </label>
+          <label>
+            Prazo
+            <input id="taskDueDate" type="date">
+          </label>
+          <label>
+            Prioridade
+            <select id="taskPriority">
+              <option value="normal">Normal</option>
+              <option value="high">Alta</option>
+              <option value="low">Baixa</option>
+            </select>
+          </label>
+          <label class="task-title-field">
+            Detalhes
+            <textarea id="taskNotes" rows="2" maxlength="220" placeholder="Observações rápidas"></textarea>
+          </label>
+          <div class="task-form-actions">
+            <button class="secondary-button" id="clearTask" type="button">Limpar</button>
+            <button class="primary-button" type="submit">Salvar tarefa</button>
+          </div>
+        </form>
+
+        <div class="task-list" id="taskList"></div>
+      </section>
     </main>
 
     <dialog id="eventDialog">
