@@ -1,4 +1,5 @@
 import express from "express";
+import pg from "pg";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -8,9 +9,12 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const port = process.env.PORT || 3000;
 const dataFile = process.env.DATA_FILE || path.join(__dirname, "data", "agenda.json");
+const databaseUrl = process.env.DATABASE_URL;
 const gistId = process.env.GIST_ID;
 const gistToken = process.env.GITHUB_TOKEN;
 const gistFilename = process.env.GIST_FILENAME || "agenda.json";
+const postgresPool = databaseUrl ? new pg.Pool({ connectionString: databaseUrl }) : null;
+let postgresSchemaReady;
 
 app.use(express.json({ limit: "2mb" }));
 app.use(express.static(__dirname, {
@@ -47,11 +51,15 @@ app.get("*", (_request, response) => {
 });
 
 app.listen(port, () => {
-  const storage = isGistStorageEnabled() ? `GitHub Gist (${gistFilename})` : dataFile;
+  const storage = postgresPool ? "Render Postgres" : isGistStorageEnabled() ? `GitHub Gist (${gistFilename})` : dataFile;
   console.log(`Agenda Mensal rodando na porta ${port}. Armazenamento: ${storage}`);
 });
 
 async function readAgenda() {
+  if (postgresPool) {
+    return readAgendaFromPostgres();
+  }
+
   if (isGistStorageEnabled()) {
     return readAgendaFromGist();
   }
@@ -65,6 +73,11 @@ async function readAgenda() {
 }
 
 async function writeAgenda(payload) {
+  if (postgresPool) {
+    await writeAgendaToPostgres(payload);
+    return;
+  }
+
   if (isGistStorageEnabled()) {
     await writeAgendaToGist(payload);
     return;
@@ -72,6 +85,41 @@ async function writeAgenda(payload) {
 
   await mkdir(path.dirname(dataFile), { recursive: true });
   await writeFile(dataFile, JSON.stringify(payload, null, 2), "utf8");
+}
+
+async function ensurePostgresSchema() {
+  if (!postgresSchemaReady) {
+    postgresSchemaReady = postgresPool.query(`
+      create table if not exists agenda_state (
+        id text primary key,
+        payload jsonb not null,
+        updated_at timestamptz not null default now()
+      )
+    `);
+  }
+  await postgresSchemaReady;
+}
+
+async function readAgendaFromPostgres() {
+  await ensurePostgresSchema();
+  const result = await postgresPool.query("select payload from agenda_state where id = $1", ["default"]);
+  if (!result.rows.length) {
+    return { events: [], tasks: [], blocks: [] };
+  }
+  return normalizePayload(result.rows[0].payload);
+}
+
+async function writeAgendaToPostgres(payload) {
+  await ensurePostgresSchema();
+  await postgresPool.query(
+    `
+      insert into agenda_state (id, payload, updated_at)
+      values ($1, $2, now())
+      on conflict (id)
+      do update set payload = excluded.payload, updated_at = now()
+    `,
+    ["default", normalizePayload(payload)]
+  );
 }
 
 function isGistStorageEnabled() {

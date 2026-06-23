@@ -2,12 +2,16 @@ services:
   - type: web
     name: agenda-mensal
     env: node
+    plan: free
     buildCommand: npm install
     startCommand: npm start
     envVars:
-      - key: GIST_ID
-        sync: false
-      - key: GITHUB_TOKEN
-        sync: false
-      - key: GIST_FILENAME
-        value: agenda.json
+      - key: DATABASE_URL
+        fromDatabase:
+          name: agenda-mensal-db
+          property: connectionString
+
+databases:
+  - name: agenda-mensal-db
+    databaseName: agenda_mensal
+    plan: free
