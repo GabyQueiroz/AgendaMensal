@@ -2,27 +2,25 @@
 
 Agenda com compromissos, tarefas, aulas, horarios livres e bloqueios manuais.
 
-## Subir no Render Free
+## Render Free usando banco existente
 
-O projeto esta pronto para subir no Render usando Blueprint. O Render cria o site e o banco Postgres automaticamente a partir do arquivo `render.yaml`.
+O Render Free permite apenas um banco Postgres gratis ativo por workspace. Por isso este projeto nao cria um banco novo automaticamente. Ele cria apenas o Web Service e usa a variavel `DATABASE_URL` do banco Postgres que voce ja tem.
 
-Aviso importante: no plano gratis, o Postgres do Render expira depois de 30 dias. Para algo permanente sem prazo, precisa trocar para um banco pago depois. Enquanto estiver ativo, computador e celular acessando o mesmo link veem os mesmos dados.
+O app cria a tabela `agenda_state` automaticamente dentro desse banco.
 
 ## Passo a passo
 
-1. Entre em <https://dashboard.render.com>.
-2. Clique em `New +`.
-3. Escolha `Blueprint`.
-4. Conecte o GitHub, se pedir.
-5. Selecione o repositorio `GabyQueiroz/AgendaMensal`.
-6. Branch: `main`.
-7. Confirme o Blueprint.
-8. Clique em `Apply` ou `Deploy Blueprint`.
+1. No Render, abra o banco Postgres que voce ja tem.
+2. Va em `Info` ou `Connect`.
+3. Copie a `Internal Database URL`.
+4. Abra o Blueprint `AgendaMensal`.
+5. Clique em `Manual sync`.
+6. Quando o Render pedir `DATABASE_URL`, cole a `Internal Database URL` do seu banco existente.
+7. Confirme o deploy.
 
-O Render vai criar:
+O Render vai criar apenas:
 
 - `agenda-mensal`: o site/API.
-- `agenda-mensal-db`: o banco Postgres gratis.
 
 Quando terminar, abra a URL do servico `agenda-mensal`.
 
