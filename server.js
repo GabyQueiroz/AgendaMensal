@@ -8,6 +8,9 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const port = process.env.PORT || 3000;
 const dataFile = process.env.DATA_FILE || path.join(__dirname, "data", "agenda.json");
+const gistId = process.env.GIST_ID;
+const gistToken = process.env.GITHUB_TOKEN;
+const gistFilename = process.env.GIST_FILENAME || "agenda.json";
 
 app.use(express.json({ limit: "2mb" }));
 app.use(express.static(__dirname, {
@@ -44,10 +47,15 @@ app.get("*", (_request, response) => {
 });
 
 app.listen(port, () => {
-  console.log(`Agenda Mensal rodando na porta ${port}`);
+  const storage = isGistStorageEnabled() ? `GitHub Gist (${gistFilename})` : dataFile;
+  console.log(`Agenda Mensal rodando na porta ${port}. Armazenamento: ${storage}`);
 });
 
 async function readAgenda() {
+  if (isGistStorageEnabled()) {
+    return readAgendaFromGist();
+  }
+
   try {
     const raw = await readFile(dataFile, "utf8");
     return normalizePayload(JSON.parse(raw));
@@ -57,8 +65,63 @@ async function readAgenda() {
 }
 
 async function writeAgenda(payload) {
+  if (isGistStorageEnabled()) {
+    await writeAgendaToGist(payload);
+    return;
+  }
+
   await mkdir(path.dirname(dataFile), { recursive: true });
   await writeFile(dataFile, JSON.stringify(payload, null, 2), "utf8");
+}
+
+function isGistStorageEnabled() {
+  return Boolean(gistId && gistToken);
+}
+
+async function readAgendaFromGist() {
+  const response = await fetch(`https://api.github.com/gists/${gistId}`, {
+    headers: githubHeaders(),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Falha ao ler Gist: ${response.status}`);
+  }
+
+  const gist = await response.json();
+  const file = gist.files?.[gistFilename];
+  if (!file?.content) {
+    return { events: [], tasks: [], blocks: [] };
+  }
+
+  return normalizePayload(JSON.parse(file.content));
+}
+
+async function writeAgendaToGist(payload) {
+  const response = await fetch(`https://api.github.com/gists/${gistId}`, {
+    method: "PATCH",
+    headers: githubHeaders(),
+    body: JSON.stringify({
+      files: {
+        [gistFilename]: {
+          content: JSON.stringify(normalizePayload(payload), null, 2),
+        },
+      },
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Falha ao salvar Gist: ${response.status}`);
+  }
+}
+
+function githubHeaders() {
+  return {
+    Accept: "application/vnd.github+json",
+    Authorization: `Bearer ${gistToken}`,
+    "Content-Type": "application/json",
+    "User-Agent": "agenda-mensal-render",
+    "X-GitHub-Api-Version": "2022-11-28",
+  };
 }
 
 function normalizePayload(payload = {}) {

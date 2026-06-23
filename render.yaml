@@ -5,9 +5,9 @@ services:
     buildCommand: npm install
     startCommand: npm start
     envVars:
-      - key: DATA_FILE
-        value: /data/agenda.json
-    disk:
-      name: agenda-data
-      mountPath: /data
-      sizeGB: 1
+      - key: GIST_ID
+        sync: false
+      - key: GITHUB_TOKEN
+        sync: false
+      - key: GIST_FILENAME
+        value: agenda.json

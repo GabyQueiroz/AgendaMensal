@@ -2,7 +2,79 @@
 
 Agenda com compromissos, tarefas, aulas, horarios livres e bloqueios manuais.
 
-Agora o projeto roda com um servidor Node e salva os dados em um arquivo JSON. Assim, quando publicado no Render, computador e celular acessam o mesmo endereco e veem os mesmos dados.
+## Persistencia no Render Free
+
+O Render Free nao preserva arquivos salvos no disco do servidor depois de restart ou redeploy. Por isso, este projeto usa um JSON salvo em um GitHub Gist quando estiver publicado no Render.
+
+O fluxo fica assim:
+
+- Render Free roda o site e a API.
+- GitHub Gist guarda o arquivo `agenda.json`.
+- Computador e celular acessam o mesmo link do Render e veem os mesmos dados.
+
+## Criar o JSON no GitHub Gist
+
+1. Acesse <https://gist.github.com>.
+2. Crie um gist chamado `agenda.json`.
+3. Coloque este conteudo inicial:
+
+```json
+{
+  "events": [],
+  "tasks": [],
+  "blocks": []
+}
+```
+
+4. Crie como `Secret gist` ou publico.
+5. Copie o ID do gist. Ele fica na URL, por exemplo:
+
+```text
+https://gist.github.com/GabyQueiroz/ID_DO_GIST
+```
+
+## Criar o token do GitHub
+
+1. Acesse <https://github.com/settings/personal-access-tokens>.
+2. Crie um token fine-grained.
+3. Permissao necessaria: `Gists` com leitura e escrita.
+4. Copie o token. Ele sera usado apenas como variavel secreta no Render.
+
+## Publicar no Render Free
+
+1. No Render, clique em `New +`.
+2. Escolha `Web Service`.
+3. Conecte o repositorio `GabyQueiroz/AgendaMensal`.
+4. Configure:
+
+```text
+Build Command: npm install
+Start Command: npm start
+Instance Type: Free
+```
+
+5. Em `Environment Variables`, adicione:
+
+```text
+GIST_ID=ID_DO_SEU_GIST
+GITHUB_TOKEN=SEU_TOKEN_DO_GITHUB
+GIST_FILENAME=agenda.json
+```
+
+6. Clique em `Create Web Service`.
+
+Quando o deploy terminar, abra o link do Render no computador e no celular.
+
+## Levar os dados atuais do computador
+
+Se seus compromissos aparecem no computador antes de publicar:
+
+1. Publique no Render.
+2. Abra o link do Render no computador onde seus dados aparecem.
+3. Se o Gist ainda estiver vazio, o app envia automaticamente os dados locais do navegador para o Gist.
+4. Abra o mesmo link no celular.
+
+Depois disso, tudo que salvar em qualquer dispositivo vai para o mesmo `agenda.json` no Gist.
 
 ## Rodar localmente
 
@@ -17,48 +89,7 @@ Abra:
 http://localhost:3000
 ```
 
-Localmente, os dados ficam em `data/agenda.json`.
-
-## Publicar no Render
-
-1. Crie um novo `Web Service` no Render usando este repositorio.
-2. Build Command:
-
-```bash
-npm install
-```
-
-3. Start Command:
-
-```bash
-npm start
-```
-
-4. Adicione um `Persistent Disk`.
-5. Configure o Mount Path do disco como:
-
-```text
-/data
-```
-
-6. Adicione a variavel de ambiente:
-
-```text
-DATA_FILE=/data/agenda.json
-```
-
-Sem Persistent Disk, o Render pode apagar o JSON em restart ou redeploy.
-
-## Levar os dados atuais do computador
-
-Depois de publicar no Render:
-
-1. Abra o site do Render no computador onde seus dados aparecem.
-2. O app carrega os dados locais do navegador.
-3. Se o JSON do servidor ainda estiver vazio, ele envia automaticamente esses dados locais para o servidor.
-4. Abra o mesmo link no celular.
-
-Depois disso, tudo que salvar em qualquer dispositivo vai para o mesmo `agenda.json` do servidor.
+Sem `GIST_ID` e `GITHUB_TOKEN`, o modo local salva em `data/agenda.json`.
 
 ## Recursos
 
