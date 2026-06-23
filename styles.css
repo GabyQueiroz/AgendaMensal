@@ -178,6 +178,37 @@ button:hover,
   pointer-events: none;
 }
 
+.sync-status {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 900;
+}
+
+.sync-status[data-mode="online"] {
+  border-color: rgba(53, 118, 78, 0.35);
+  background: #edf7f0;
+  color: var(--done);
+}
+
+.sync-status[data-mode="syncing"] {
+  border-color: rgba(184, 135, 29, 0.35);
+  background: #fff7dc;
+  color: #6b5013;
+}
+
+.sync-status[data-mode="offline"] {
+  border-color: rgba(175, 62, 67, 0.35);
+  background: #fdebed;
+  color: var(--danger);
+}
+
 .dashboard {
   grid-template-columns: repeat(4, minmax(0, 1fr));
   margin-bottom: 16px;
@@ -620,6 +651,10 @@ dialog {
   width: min(680px, calc(100% - 24px));
 }
 
+#cloudDialog {
+  width: min(780px, calc(100% - 24px));
+}
+
 dialog::backdrop {
   background: rgba(18, 25, 28, 0.42);
 }
@@ -630,6 +665,25 @@ dialog::backdrop {
 
 .quick-modal {
   padding: 20px;
+}
+
+.cloud-modal {
+  padding: 20px;
+}
+
+.cloud-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.cloud-note {
+  margin-top: 14px;
+  padding: 12px;
+  border-radius: 8px;
+  background: var(--surface-soft);
+  color: var(--muted);
+  font-weight: 800;
 }
 
 .dialog-header {
@@ -765,7 +819,8 @@ textarea {
   .dashboard,
   .task-header,
   .task-form,
-  .block-form {
+  .block-form,
+  .cloud-grid {
     grid-template-columns: 1fr;
   }
 

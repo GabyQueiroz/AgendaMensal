@@ -19,6 +19,8 @@
             ⇧
             <input id="importData" type="file" accept="application/json">
           </label>
+          <span class="sync-status" id="syncStatus">Local</span>
+          <button class="secondary-button" id="cloudSettings" type="button">Nuvem</button>
           <button class="secondary-button" id="quickEvents" type="button">Guia rápido</button>
           <button class="secondary-button" id="quickTasks" type="button">Tarefas</button>
           <button class="primary-button" id="newEvent" type="button"><span aria-hidden="true">+</span> Novo</button>
@@ -251,6 +253,46 @@
       </div>
     </dialog>
 
+    <dialog id="cloudDialog">
+      <form class="cloud-modal" id="cloudForm" method="dialog">
+        <div class="dialog-header">
+          <div>
+            <p class="eyebrow">Sincronização</p>
+            <h2>Salvar em qualquer dispositivo</h2>
+          </div>
+          <button class="icon-button" type="button" id="closeCloudDialog" title="Fechar" aria-label="Fechar">×</button>
+        </div>
+        <div class="cloud-grid">
+          <label class="wide">
+            Supabase Project URL
+            <input id="cloudUrlInput" placeholder="https://seu-projeto.supabase.co">
+          </label>
+          <label class="wide">
+            Supabase anon public key
+            <input id="cloudKeyInput" placeholder="eyJhbGciOi...">
+          </label>
+          <label>
+            Tabela
+            <input id="cloudTableInput" value="agenda_data">
+          </label>
+          <label>
+            Documento
+            <input id="cloudDocumentInput" value="default">
+          </label>
+        </div>
+        <div class="cloud-note">
+          Use o botão de salvar para mandar os dados deste aparelho para a nuvem. Depois, use a mesma URL e chave no celular.
+        </div>
+        <div class="dialog-actions">
+          <button class="danger-button" id="clearCloudConfig" type="button">Usar local</button>
+          <span></span>
+          <button class="secondary-button" id="pullCloudData" type="button">Baixar da nuvem</button>
+          <button class="primary-button" type="submit">Salvar e enviar</button>
+        </div>
+      </form>
+    </dialog>
+
+    <script src="config.js"></script>
     <script src="app.js"></script>
   </body>
 </html>

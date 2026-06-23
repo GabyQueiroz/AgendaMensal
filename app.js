@@ -2,6 +2,8 @@ const STORAGE_KEY = "agenda-mensal-v1";
 const WORK_START = "07:00";
 const WORK_END = "22:00";
 const SLOT_MINUTES = 60;
+const CLOUD_SETTINGS_KEY = "agenda-cloud-settings-v1";
+let CLOUD_CONFIG = readCloudConfig();
 
 const state = {
   events: [],
@@ -9,6 +11,8 @@ const state = {
   blocks: [],
   viewDate: startOfMonth(new Date()),
   selectedDate: toDateKey(new Date()),
+  cloudReady: false,
+  cloudSaving: false,
 };
 
 const el = {
@@ -23,6 +27,7 @@ const el = {
   importantCount: document.querySelector("#importantCount"),
   pendingCount: document.querySelector("#pendingCount"),
   doneCount: document.querySelector("#doneCount"),
+  syncStatus: document.querySelector("#syncStatus"),
   dialog: document.querySelector("#eventDialog"),
   form: document.querySelector("#eventForm"),
   dialogTitle: document.querySelector("#dialogTitle"),
@@ -38,6 +43,8 @@ const el = {
   quickEyebrow: document.querySelector("#quickEyebrow"),
   quickTitle: document.querySelector("#quickTitle"),
   quickList: document.querySelector("#quickList"),
+  cloudDialog: document.querySelector("#cloudDialog"),
+  cloudForm: document.querySelector("#cloudForm"),
 };
 
 const fields = {
@@ -70,6 +77,13 @@ const blockFields = {
   reason: document.querySelector("#blockReason"),
 };
 
+const cloudFields = {
+  url: document.querySelector("#cloudUrlInput"),
+  key: document.querySelector("#cloudKeyInput"),
+  table: document.querySelector("#cloudTableInput"),
+  documentId: document.querySelector("#cloudDocumentInput"),
+};
+
 document.querySelector("#previousMonth").addEventListener("click", () => moveMonth(-1));
 document.querySelector("#nextMonth").addEventListener("click", () => moveMonth(1));
 document.querySelector("#todayButton").addEventListener("click", selectToday);
@@ -89,21 +103,31 @@ document.querySelector("#importantMetric").addEventListener("click", () => openE
 document.querySelector("#pendingMetric").addEventListener("click", () => openMixedGuide("pending"));
 document.querySelector("#doneMetric").addEventListener("click", () => openMixedGuide("done"));
 document.querySelector("#closeQuickDialog").addEventListener("click", closeQuickDialog);
+document.querySelector("#cloudSettings").addEventListener("click", openCloudDialog);
+document.querySelector("#closeCloudDialog").addEventListener("click", closeCloudDialog);
+document.querySelector("#clearCloudConfig").addEventListener("click", clearCloudConfig);
+document.querySelector("#pullCloudData").addEventListener("click", pullCloudData);
 el.form.addEventListener("submit", saveEvent);
 el.deleteEvent.addEventListener("click", deleteEvent);
 el.taskForm.addEventListener("submit", saveTask);
 el.blockForm.addEventListener("submit", saveBlock);
+el.cloudForm.addEventListener("submit", saveCloudConfig);
 
-load();
-render();
+init();
 
-function load() {
+async function init() {
+  loadLocal();
+  render();
+  await loadCloud();
+}
+
+function loadLocal() {
   const saved = localStorage.getItem(STORAGE_KEY);
   if (!saved) {
     state.events = seedEvents();
     state.blocks = [];
     ensureSenacClasses();
-    persist();
+    persist({ syncCloud: false });
     return;
   }
 
@@ -113,7 +137,7 @@ function load() {
     state.tasks = Array.isArray(parsed.tasks) ? parsed.tasks : [];
     state.blocks = Array.isArray(parsed.blocks) ? parsed.blocks : [];
     ensureSenacClasses();
-    persist();
+    persist({ syncCloud: false });
   } catch {
     state.events = [];
     state.tasks = [];
@@ -207,8 +231,179 @@ function ensureSenacClasses() {
   });
 }
 
-function persist() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify({ events: state.events, tasks: state.tasks, blocks: state.blocks }));
+function persist(options = {}) {
+  const { syncCloud = true } = options;
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(getDataPayload()));
+  if (syncCloud) {
+    saveCloud();
+  }
+}
+
+function getDataPayload() {
+  return { events: state.events, tasks: state.tasks, blocks: state.blocks };
+}
+
+function readCloudConfig() {
+  const fileConfig = window.AGENDA_CLOUD || {};
+  try {
+    const saved = JSON.parse(localStorage.getItem(CLOUD_SETTINGS_KEY) || "{}");
+    return { ...fileConfig, ...saved };
+  } catch {
+    return fileConfig;
+  }
+}
+
+function openCloudDialog() {
+  cloudFields.url.value = CLOUD_CONFIG.supabaseUrl || "";
+  cloudFields.key.value = CLOUD_CONFIG.supabaseAnonKey || "";
+  cloudFields.table.value = CLOUD_CONFIG.table || "agenda_data";
+  cloudFields.documentId.value = CLOUD_CONFIG.documentId || "default";
+  el.cloudDialog.showModal();
+}
+
+function closeCloudDialog() {
+  el.cloudDialog.close();
+}
+
+async function saveCloudConfig(event) {
+  event.preventDefault();
+  CLOUD_CONFIG = {
+    provider: "supabase",
+    supabaseUrl: cloudFields.url.value.trim(),
+    supabaseAnonKey: cloudFields.key.value.trim(),
+    table: cloudFields.table.value.trim() || "agenda_data",
+    documentId: cloudFields.documentId.value.trim() || "default",
+  };
+  localStorage.setItem(CLOUD_SETTINGS_KEY, JSON.stringify(CLOUD_CONFIG));
+  await saveCloud({ force: true });
+  closeCloudDialog();
+}
+
+async function pullCloudData() {
+  CLOUD_CONFIG = {
+    provider: "supabase",
+    supabaseUrl: cloudFields.url.value.trim(),
+    supabaseAnonKey: cloudFields.key.value.trim(),
+    table: cloudFields.table.value.trim() || "agenda_data",
+    documentId: cloudFields.documentId.value.trim() || "default",
+  };
+  localStorage.setItem(CLOUD_SETTINGS_KEY, JSON.stringify(CLOUD_CONFIG));
+  await loadCloud();
+  closeCloudDialog();
+}
+
+function clearCloudConfig() {
+  localStorage.removeItem(CLOUD_SETTINGS_KEY);
+  CLOUD_CONFIG = window.AGENDA_CLOUD || {};
+  setSyncStatus("Local", "local");
+  closeCloudDialog();
+}
+
+function applyDataPayload(payload) {
+  state.events = Array.isArray(payload.events) ? payload.events : [];
+  state.tasks = Array.isArray(payload.tasks) ? payload.tasks : [];
+  state.blocks = Array.isArray(payload.blocks) ? payload.blocks : [];
+  ensureSenacClasses();
+  persist({ syncCloud: false });
+}
+
+function isCloudConfigured() {
+  return CLOUD_CONFIG.provider === "supabase" && CLOUD_CONFIG.supabaseUrl && CLOUD_CONFIG.supabaseAnonKey;
+}
+
+function setSyncStatus(text, mode = "local") {
+  el.syncStatus.textContent = text;
+  el.syncStatus.dataset.mode = mode;
+}
+
+async function loadCloud() {
+  if (!isCloudConfigured()) {
+    setSyncStatus("Local", "local");
+    return;
+  }
+
+  setSyncStatus("Sincronizando", "syncing");
+  try {
+    const response = await fetch(cloudUrl(), {
+      headers: cloudHeaders(),
+    });
+
+    if (response.status === 404) {
+      state.cloudReady = true;
+      await saveCloud();
+      return;
+    }
+
+    if (!response.ok) throw new Error("Falha ao carregar dados online");
+    const rows = await response.json();
+    state.cloudReady = true;
+
+    if (Array.isArray(rows) && rows.length && rows[0].payload) {
+      applyDataPayload(rows[0].payload);
+      render();
+      setSyncStatus("Online", "online");
+      return;
+    }
+
+    await saveCloud();
+  } catch {
+    state.cloudReady = false;
+    setSyncStatus("Offline", "offline");
+  }
+}
+
+async function saveCloud(options = {}) {
+  const { force = false } = options;
+  if (!isCloudConfigured()) {
+    setSyncStatus("Local", "local");
+    return;
+  }
+
+  if (state.cloudSaving && !force) return;
+  state.cloudSaving = true;
+  setSyncStatus("Salvando", "syncing");
+
+  try {
+    const response = await fetch(`${baseCloudTableUrl()}?on_conflict=id`, {
+      method: "POST",
+      headers: {
+        ...cloudHeaders(),
+        Prefer: "resolution=merge-duplicates",
+      },
+      body: JSON.stringify({
+        id: CLOUD_CONFIG.documentId || "default",
+        payload: getDataPayload(),
+        updated_at: new Date().toISOString(),
+      }),
+    });
+
+    if (!response.ok) throw new Error("Falha ao salvar dados online");
+    state.cloudReady = true;
+    setSyncStatus("Online", "online");
+  } catch {
+    state.cloudReady = false;
+    setSyncStatus("Offline", "offline");
+  } finally {
+    state.cloudSaving = false;
+  }
+}
+
+function baseCloudTableUrl() {
+  const base = CLOUD_CONFIG.supabaseUrl.replace(/\/$/, "");
+  return `${base}/rest/v1/${CLOUD_CONFIG.table || "agenda_data"}`;
+}
+
+function cloudUrl() {
+  const documentId = encodeURIComponent(CLOUD_CONFIG.documentId || "default");
+  return `${baseCloudTableUrl()}?id=eq.${documentId}&select=payload`;
+}
+
+function cloudHeaders() {
+  return {
+    apikey: CLOUD_CONFIG.supabaseAnonKey,
+    Authorization: `Bearer ${CLOUD_CONFIG.supabaseAnonKey}`,
+    "Content-Type": "application/json",
+  };
 }
 
 function render() {
