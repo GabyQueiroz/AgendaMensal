@@ -1,5 +1,6 @@
 window.AGENDA_CLOUD = {
-  provider: "local",
+  provider: "server",
+  serverUrl: "",
   supabaseUrl: "",
   supabaseAnonKey: "",
   table: "agenda_data",

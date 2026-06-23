@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: agenda-mensal
+    env: node
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: DATA_FILE
+        value: /data/agenda.json
+    disk:
+      name: agenda-data
+      mountPath: /data
+      sizeGB: 1

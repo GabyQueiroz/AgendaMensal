@@ -308,6 +308,7 @@ function applyDataPayload(payload) {
 }
 
 function isCloudConfigured() {
+  if (CLOUD_CONFIG.provider === "server") return true;
   return CLOUD_CONFIG.provider === "supabase" && CLOUD_CONFIG.supabaseUrl && CLOUD_CONFIG.supabaseAnonKey;
 }
 
@@ -319,6 +320,11 @@ function setSyncStatus(text, mode = "local") {
 async function loadCloud() {
   if (!isCloudConfigured()) {
     setSyncStatus("Local", "local");
+    return;
+  }
+
+  if (CLOUD_CONFIG.provider === "server") {
+    await loadServerData();
     return;
   }
 
@@ -360,6 +366,12 @@ async function saveCloud(options = {}) {
   }
 
   if (state.cloudSaving && !force) return;
+
+  if (CLOUD_CONFIG.provider === "server") {
+    await saveServerData();
+    return;
+  }
+
   state.cloudSaving = true;
   setSyncStatus("Salvando", "syncing");
 
@@ -386,6 +398,62 @@ async function saveCloud(options = {}) {
   } finally {
     state.cloudSaving = false;
   }
+}
+
+async function loadServerData() {
+  setSyncStatus("Sincronizando", "syncing");
+  try {
+    const response = await fetch(serverAgendaUrl(), { headers: { Accept: "application/json" } });
+    if (!response.ok) throw new Error("Falha ao carregar dados do servidor");
+    const payload = await response.json();
+
+    const hasServerData = hasAnyData(payload);
+    const hasLocalData = hasAnyData(getDataPayload());
+    if (hasServerData) {
+      applyDataPayload(payload);
+      render();
+      setSyncStatus("Online", "online");
+      return;
+    }
+
+    if (hasLocalData) {
+      await saveServerData();
+      return;
+    }
+
+    setSyncStatus("Online", "online");
+  } catch {
+    setSyncStatus("Offline", "offline");
+  }
+}
+
+async function saveServerData() {
+  if (state.cloudSaving) return;
+  state.cloudSaving = true;
+  setSyncStatus("Salvando", "syncing");
+
+  try {
+    const response = await fetch(serverAgendaUrl(), {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(getDataPayload()),
+    });
+    if (!response.ok) throw new Error("Falha ao salvar dados no servidor");
+    setSyncStatus("Online", "online");
+  } catch {
+    setSyncStatus("Offline", "offline");
+  } finally {
+    state.cloudSaving = false;
+  }
+}
+
+function serverAgendaUrl() {
+  const base = (CLOUD_CONFIG.serverUrl || "").replace(/\/$/, "");
+  return `${base}/api/agenda`;
+}
+
+function hasAnyData(payload = {}) {
+  return Boolean(payload.events?.length || payload.tasks?.length || payload.blocks?.length);
 }
 
 function baseCloudTableUrl() {

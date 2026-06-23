@@ -20,7 +20,7 @@
             <input id="importData" type="file" accept="application/json">
           </label>
           <span class="sync-status" id="syncStatus">Local</span>
-          <button class="secondary-button" id="cloudSettings" type="button">Nuvem</button>
+          <button class="secondary-button" id="cloudSettings" type="button">Servidor</button>
           <button class="secondary-button" id="quickEvents" type="button">Guia rápido</button>
           <button class="secondary-button" id="quickTasks" type="button">Tarefas</button>
           <button class="primary-button" id="newEvent" type="button"><span aria-hidden="true">+</span> Novo</button>
@@ -257,8 +257,8 @@
       <form class="cloud-modal" id="cloudForm" method="dialog">
         <div class="dialog-header">
           <div>
-            <p class="eyebrow">Sincronização</p>
-            <h2>Salvar em qualquer dispositivo</h2>
+            <p class="eyebrow">Servidor</p>
+            <h2>Dados compartilhados</h2>
           </div>
           <button class="icon-button" type="button" id="closeCloudDialog" title="Fechar" aria-label="Fechar">×</button>
         </div>
@@ -281,7 +281,7 @@
           </label>
         </div>
         <div class="cloud-note">
-          Use o botão de salvar para mandar os dados deste aparelho para a nuvem. Depois, use a mesma URL e chave no celular.
+          No Render, os dados salvam automaticamente no servidor. Estes campos ficam apenas como opcao avancada para usar Supabase em vez do servidor JSON.
         </div>
         <div class="dialog-actions">
           <button class="danger-button" id="clearCloudConfig" type="button">Usar local</button>
