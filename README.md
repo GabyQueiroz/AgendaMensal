@@ -2,35 +2,44 @@
 
 Agenda com compromissos, tarefas, aulas, horarios livres e bloqueios manuais.
 
-## Render Free usando banco existente
+## Persistencia sem banco
 
-O Render Free permite apenas um banco Postgres gratis ativo por workspace. Por isso este projeto nao cria um banco novo automaticamente. Ele cria apenas o Web Service e usa a variavel `DATABASE_URL` do banco Postgres que voce ja tem.
+Este projeto nao precisa de banco. O Render roda o site, e os dados ficam em um arquivo JSON no proprio GitHub:
 
-O app cria a tabela `agenda_state` automaticamente dentro desse banco.
+```text
+branch data / agenda-data.json
+```
 
-## Passo a passo
+O servidor cria essa branch e esse arquivo automaticamente quando voce salvar dados pela primeira vez.
 
-1. No Render, abra o banco Postgres que voce ja tem.
-2. Va em `Info` ou `Connect`.
-3. Copie a `Internal Database URL`.
-4. Abra o Blueprint `AgendaMensal`.
-5. Clique em `Manual sync`.
-6. Quando o Render pedir `DATABASE_URL`, cole a `Internal Database URL` do seu banco existente.
-7. Confirme o deploy.
+## Subir no Render
 
-O Render vai criar apenas:
+1. Crie um token do GitHub:
+   - Acesse <https://github.com/settings/personal-access-tokens>
+   - Crie um token fine-grained para o repositorio `GabyQueiroz/AgendaMensal`
+   - Permissao: `Contents` com `Read and write`
+   - Copie o token
 
-- `agenda-mensal`: o site/API.
+2. No Render:
+   - Clique em `New +`
+   - Escolha `Blueprint`
+   - Selecione o repositorio `GabyQueiroz/AgendaMensal`
+   - Branch: `main`
+   - Confirme
 
-Quando terminar, abra a URL do servico `agenda-mensal`.
+3. Quando o Render pedir `GITHUB_JSON_TOKEN`, cole o token do GitHub.
+
+4. Confirme o deploy.
+
+O Render vai criar apenas o site/API `agenda-mensal`.
 
 ## Levar os dados atuais do computador
 
 1. Abra a URL do Render no computador onde seus dados aparecem.
-2. Se o banco estiver vazio, o app envia automaticamente os dados locais do navegador para o servidor.
+2. Se o JSON no GitHub ainda estiver vazio, o app envia automaticamente os dados locais do navegador para o arquivo `agenda-data.json`.
 3. Depois abra a mesma URL no celular.
 
-Depois disso, tudo que salvar em qualquer dispositivo vai para o mesmo banco.
+Depois disso, tudo que salvar em qualquer dispositivo vai para o mesmo JSON no GitHub.
 
 ## Rodar localmente
 
@@ -45,7 +54,7 @@ Abra:
 http://localhost:3000
 ```
 
-Localmente, sem `DATABASE_URL`, o app salva em `data/agenda.json`.
+Localmente, sem `GITHUB_JSON_TOKEN`, o app salva em `data/agenda.json`.
 
 ## Recursos
 

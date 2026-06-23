@@ -13,6 +13,12 @@ const databaseUrl = process.env.DATABASE_URL;
 const gistId = process.env.GIST_ID;
 const gistToken = process.env.GITHUB_TOKEN;
 const gistFilename = process.env.GIST_FILENAME || "agenda.json";
+const githubToken = process.env.GITHUB_JSON_TOKEN || process.env.GITHUB_TOKEN;
+const githubOwner = process.env.GITHUB_OWNER;
+const githubRepo = process.env.GITHUB_REPO;
+const githubDataPath = process.env.GITHUB_DATA_PATH || "agenda-data.json";
+const githubDataBranch = process.env.GITHUB_DATA_BRANCH || "data";
+const githubSourceBranch = process.env.GITHUB_SOURCE_BRANCH || "main";
 const postgresPool = databaseUrl ? new pg.Pool({ connectionString: databaseUrl }) : null;
 let postgresSchemaReady;
 
@@ -51,11 +57,21 @@ app.get("*", (_request, response) => {
 });
 
 app.listen(port, () => {
-  const storage = postgresPool ? "Render Postgres" : isGistStorageEnabled() ? `GitHub Gist (${gistFilename})` : dataFile;
+  const storage = isGitHubJsonStorageEnabled()
+    ? `GitHub JSON (${githubOwner}/${githubRepo}:${githubDataBranch}/${githubDataPath})`
+    : postgresPool
+      ? "Render Postgres"
+      : isGistStorageEnabled()
+        ? `GitHub Gist (${gistFilename})`
+        : dataFile;
   console.log(`Agenda Mensal rodando na porta ${port}. Armazenamento: ${storage}`);
 });
 
 async function readAgenda() {
+  if (isGitHubJsonStorageEnabled()) {
+    return readAgendaFromGitHubJson();
+  }
+
   if (postgresPool) {
     return readAgendaFromPostgres();
   }
@@ -73,6 +89,11 @@ async function readAgenda() {
 }
 
 async function writeAgenda(payload) {
+  if (isGitHubJsonStorageEnabled()) {
+    await writeAgendaToGitHubJson(payload);
+    return;
+  }
+
   if (postgresPool) {
     await writeAgendaToPostgres(payload);
     return;
@@ -122,13 +143,110 @@ async function writeAgendaToPostgres(payload) {
   );
 }
 
+function isGitHubJsonStorageEnabled() {
+  return Boolean(githubToken && githubOwner && githubRepo);
+}
+
+async function readAgendaFromGitHubJson() {
+  await ensureGitHubDataBranch();
+  const file = await getGitHubDataFile();
+  if (!file?.content) {
+    return { events: [], tasks: [], blocks: [] };
+  }
+
+  const raw = Buffer.from(file.content, "base64").toString("utf8");
+  return normalizePayload(JSON.parse(raw));
+}
+
+async function writeAgendaToGitHubJson(payload) {
+  await ensureGitHubDataBranch();
+  const existingFile = await getGitHubDataFile();
+  const body = {
+    message: "Atualiza dados da agenda",
+    content: Buffer.from(JSON.stringify(normalizePayload(payload), null, 2), "utf8").toString("base64"),
+    branch: githubDataBranch,
+  };
+
+  if (existingFile?.sha) {
+    body.sha = existingFile.sha;
+  }
+
+  const response = await fetch(githubContentsUrl(), {
+    method: "PUT",
+    headers: githubHeaders(githubToken),
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Falha ao salvar JSON no GitHub: ${response.status}`);
+  }
+}
+
+async function getGitHubDataFile() {
+  const response = await fetch(`${githubContentsUrl()}?ref=${encodeURIComponent(githubDataBranch)}`, {
+    headers: githubHeaders(githubToken),
+  });
+
+  if (response.status === 404) return null;
+  if (!response.ok) {
+    throw new Error(`Falha ao ler JSON no GitHub: ${response.status}`);
+  }
+
+  return response.json();
+}
+
+async function ensureGitHubDataBranch() {
+  const dataRefResponse = await fetch(githubRefUrl(githubDataBranch), {
+    headers: githubHeaders(githubToken),
+  });
+
+  if (dataRefResponse.ok) return;
+  if (dataRefResponse.status !== 404) {
+    throw new Error(`Falha ao verificar branch de dados: ${dataRefResponse.status}`);
+  }
+
+  const sourceRefResponse = await fetch(githubRefUrl(githubSourceBranch), {
+    headers: githubHeaders(githubToken),
+  });
+
+  if (!sourceRefResponse.ok) {
+    throw new Error(`Falha ao ler branch principal: ${sourceRefResponse.status}`);
+  }
+
+  const sourceRef = await sourceRefResponse.json();
+  const createRefResponse = await fetch(githubRefsUrl(), {
+    method: "POST",
+    headers: githubHeaders(githubToken),
+    body: JSON.stringify({
+      ref: `refs/heads/${githubDataBranch}`,
+      sha: sourceRef.object.sha,
+    }),
+  });
+
+  if (!createRefResponse.ok && createRefResponse.status !== 422) {
+    throw new Error(`Falha ao criar branch de dados: ${createRefResponse.status}`);
+  }
+}
+
+function githubContentsUrl() {
+  return `https://api.github.com/repos/${githubOwner}/${githubRepo}/contents/${githubDataPath}`;
+}
+
+function githubRefUrl(branch) {
+  return `${githubRefsUrl()}/heads/${encodeURIComponent(branch)}`;
+}
+
+function githubRefsUrl() {
+  return `https://api.github.com/repos/${githubOwner}/${githubRepo}/git/refs`;
+}
+
 function isGistStorageEnabled() {
   return Boolean(gistId && gistToken);
 }
 
 async function readAgendaFromGist() {
   const response = await fetch(`https://api.github.com/gists/${gistId}`, {
-    headers: githubHeaders(),
+    headers: githubHeaders(gistToken),
   });
 
   if (!response.ok) {
@@ -147,7 +265,7 @@ async function readAgendaFromGist() {
 async function writeAgendaToGist(payload) {
   const response = await fetch(`https://api.github.com/gists/${gistId}`, {
     method: "PATCH",
-    headers: githubHeaders(),
+    headers: githubHeaders(gistToken),
     body: JSON.stringify({
       files: {
         [gistFilename]: {
@@ -162,10 +280,10 @@ async function writeAgendaToGist(payload) {
   }
 }
 
-function githubHeaders() {
+function githubHeaders(token) {
   return {
     Accept: "application/vnd.github+json",
-    Authorization: `Bearer ${gistToken}`,
+    Authorization: `Bearer ${token}`,
     "Content-Type": "application/json",
     "User-Agent": "agenda-mensal-render",
     "X-GitHub-Api-Version": "2022-11-28",

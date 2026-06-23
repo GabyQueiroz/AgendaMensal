@@ -6,5 +6,13 @@ services:
     buildCommand: npm install
     startCommand: npm start
     envVars:
-      - key: DATABASE_URL
+      - key: GITHUB_JSON_TOKEN
         sync: false
+      - key: GITHUB_OWNER
+        value: GabyQueiroz
+      - key: GITHUB_REPO
+        value: AgendaMensal
+      - key: GITHUB_DATA_BRANCH
+        value: data
+      - key: GITHUB_DATA_PATH
+        value: agenda-data.json
